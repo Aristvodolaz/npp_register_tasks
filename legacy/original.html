@@ -1,0 +1,1642 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>НПП — Регистр заявок</title>
+    <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; padding: 20px; }
+        .container { max-width: 1900px; margin: 0 auto; }
+        h1 { color: #1a365d; margin-bottom: 20px; font-size: 24px; }
+
+        .toolbar { background: white; padding: 15px 20px; border-radius: 8px; margin-bottom: 15px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .toolbar button { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; transition: all 0.2s; }
+        .btn-add { background: #2563eb; color: white; }
+        .btn-add:hover { background: #1d4ed8; }
+        .btn-export { background: #16a34a; color: white; }
+        .btn-export:hover { background: #15803d; }
+        .btn-clear { background: #dc2626; color: white; }
+        .btn-clear:hover { background: #b91c1c; }
+        .btn-reset { background: #6b7280; color: white; }
+        .btn-reset:hover { background: #4b5563; }
+        .btn-import { background: #7c3aed; color: white; }
+        .btn-import:hover { background: #6d28d9; }
+        .btn-template { background: #0891b2; color: white; }
+        .btn-template:hover { background: #0e7490; }
+
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 15px; }
+        .stat-card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); text-align: center; }
+        .stat-card .number { font-size: 28px; font-weight: bold; color: #1e40af; }
+        .stat-card .label { font-size: 12px; color: #6b7280; margin-top: 4px; }
+
+        /* ===== BEAUTIFUL FILTERS PANEL ===== */
+        .filters-panel { 
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); 
+            padding: 20px 24px; 
+            border-radius: 12px; 
+            margin-bottom: 15px; 
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03); 
+            border: 1px solid #e2e8f0;
+            position: relative;
+            overflow: hidden;
+        }
+        .filters-panel::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #2563eb, #7c3aed, #db2777);
+            border-radius: 12px 12px 0 0;
+        }
+        .filters-panel h3 { 
+            font-size: 15px; 
+            color: #1e293b; 
+            margin-bottom: 16px; 
+            display: flex; 
+            align-items: center; 
+            gap: 8px;
+            font-weight: 600;
+        }
+        .filters-panel h3::before {
+            content: '🔍';
+            font-size: 16px;
+        }
+        .filters-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+        .filter-group { 
+            display: flex; 
+            flex-direction: column; 
+            gap: 6px; 
+            background: #ffffff;
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            transition: all 0.2s;
+        }
+        .filter-group:hover {
+            border-color: #cbd5e1;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+        }
+        .filter-group label { 
+            font-size: 11px; 
+            color: #64748b; 
+            font-weight: 600; 
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        .filter-group select, .filter-group input { 
+            padding: 8px 12px; 
+            border: 1px solid #d1d5db; 
+            border-radius: 6px; 
+            font-size: 13px; 
+            background: #ffffff;
+            transition: all 0.2s;
+        }
+        .filter-group select:focus, .filter-group input:focus {
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+            outline: none;
+        }
+        .filter-group input[type="date"] { font-family: monospace; }
+
+        .period-row { display: flex; flex-direction: column; gap: 6px; }
+        .period-row input { width: 100%; min-width: 0; }
+        .period-row .date-label { font-size: 11px; color: #9ca3af; }
+
+        .filter-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 600;
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .import-area { background: white; padding: 15px 20px; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: none; }
+        .import-area.active { display: block; }
+        .import-dropzone { border: 2px dashed #d1d5db; border-radius: 8px; padding: 30px; text-align: center; cursor: pointer; transition: all 0.2s; }
+        .import-dropzone:hover, .import-dropzone.dragover { border-color: #7c3aed; background: #f5f3ff; }
+        .import-dropzone .icon { font-size: 32px; margin-bottom: 8px; }
+        .import-dropzone .text { color: #6b7280; font-size: 13px; }
+        .import-dropzone .subtext { color: #9ca3af; font-size: 11px; margin-top: 4px; }
+        .import-file-input { display: none; }
+        .import-results { margin-top: 12px; padding: 10px; background: #f0fdf4; border-radius: 6px; font-size: 13px; color: #166534; display: none; }
+        .import-results.error { background: #fef2f2; color: #991b1b; }
+        .import-results.active { display: block; }
+
+        .table-outer { overflow-x: auto; transform: rotateX(180deg); background: white; border-radius: 8px 8px 0 0; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .table-inner { transform: rotateX(180deg); overflow-y: auto; max-height: 65vh; border-radius: 0 0 8px 8px; }
+        
+        /* Sticky header needs to stick to bottom in the flipped container */
+        .table-inner thead { position: sticky; top: 0; z-index: 10; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 1800px; }
+        thead { position: sticky; top: 0; z-index: 10; }
+        th { background: #1e3a5f; color: white; padding: 12px 8px; text-align: left; font-weight: 600; white-space: nowrap; position: relative; cursor: pointer; user-select: none; }
+        th:hover { background: #2c5282; }
+        th .sort-icon { margin-left: 4px; font-size: 11px; opacity: 0.5; }
+        th.sort-asc .sort-icon::after { content: " ▲"; opacity: 1; }
+        th.sort-desc .sort-icon::after { content: " ▼"; opacity: 1; }
+        td { padding: 8px; border-bottom: 1px solid #e5e7eb; vertical-align: middle; }
+        tr:hover td { background: #f8fafc; }
+
+        .status-new { background: white; }
+        .status-priemka { background: #ffedd5; }
+        .status-proizvodstvo-passed { background: #e0f2fe; }
+        .status-proizvodstvo-work { background: #dbeafe; }
+        .status-operators { background: #dcfce7; }
+        .status-done { background: #bbf7d0; }
+        .status-shipped { background: #fef08a; }
+        .status-deleted { background: #fecaca; }
+
+        .status-select { padding: 4px 8px; border-radius: 4px; border: 1px solid #d1d5db; font-size: 12px; cursor: pointer; width: 100%; }
+
+        .cell-input { width: 100%; padding: 4px 6px; border: 1px solid transparent; border-radius: 4px; font-size: 13px; background: transparent; }
+        .cell-input:focus { border-color: #3b82f6; background: white; outline: none; }
+        .cell-input.date { font-family: monospace; }
+        .cell-input.number { text-align: center; }
+
+        .cell-auto { background: #f3f4f6; color: #374151; font-weight: 500; padding: 4px 6px; border-radius: 4px; display: inline-block; }
+        .cell-auto.green { background: #dcfce7; color: #166534; }
+        .cell-auto.red { background: #fecaca; color: #991b1b; }
+
+        .actions { display: flex; gap: 4px; }
+        .actions button { padding: 4px 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; }
+        .btn-edit { background: #f59e0b; color: white; }
+        .btn-delete { background: #ef4444; color: white; }
+
+        .empty-row td { height: 40px; }
+
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-overlay.active { display: flex; }
+        .modal { background: white; border-radius: 12px; padding: 24px; width: 500px; max-width: 90%; max-height: 90vh; overflow-y: auto; }
+        .modal h2 { margin-bottom: 16px; color: #1e3a5f; }
+        .modal .form-group { margin-bottom: 12px; }
+        .modal label { display: block; font-size: 13px; color: #4b5563; margin-bottom: 4px; font-weight: 500; }
+        .modal input, .modal select, .modal textarea { width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; }
+        .modal textarea { resize: vertical; min-height: 60px; }
+        .modal-buttons { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
+        .modal-buttons button { padding: 8px 20px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; }
+        .btn-save { background: #2563eb; color: white; }
+        .btn-cancel { background: #e5e7eb; color: #374151; }
+
+        .toast { position: fixed; bottom: 20px; right: 20px; padding: 12px 20px; border-radius: 8px; color: white; font-size: 13px; z-index: 2000; opacity: 0; transition: opacity 0.3s; }
+        .toast.show { opacity: 1; }
+        .toast.success { background: #16a34a; }
+        .toast.error { background: #dc2626; }
+        .toast.info { background: #2563eb; }
+
+        .checkbox { width: 16px; height: 16px; cursor: pointer; }
+
+        /* Collapsible filters */
+        .filters-panel h3 { cursor: pointer; user-select: none; }
+        .filters-panel h3:hover { opacity: 0.8; }
+        #filters-content {
+            max-height: 500px;
+            overflow: hidden;
+            transition: max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease;
+            opacity: 1;
+        }
+        #filters-content.collapsed {
+            max-height: 0;
+            opacity: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+        }
+        #filters-toggle-icon { transition: transform 0.3s; }
+        #filters-toggle-icon.collapsed { transform: rotate(-90deg); }
+
+        /* Resizable columns */
+        th { position: relative; }
+        .resize-handle {
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 5px;
+            cursor: col-resize;
+            z-index: 20;
+            background: transparent;
+        }
+        .resize-handle:hover { background: rgba(255,255,255,0.3); }
+        .resize-handle.resizing { background: rgba(255,255,255,0.5); }
+        td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .cell-input { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        /* Customer stats */
+        .customer-stats { margin-top: 15px; }
+        .customer-stats-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            user-select: none;
+            padding: 10px 15px;
+            background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%);
+            color: white;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            transition: opacity 0.2s;
+        }
+        .customer-stats-header:hover { opacity: 0.9; }
+        .customer-stats-header .arrow {
+            transition: transform 0.3s;
+            font-size: 12px;
+        }
+        .customer-stats-header .arrow.collapsed { transform: rotate(-90deg); }
+        .customer-stats-content {
+            max-height: 2000px;
+            overflow: hidden;
+            transition: max-height 0.4s ease, opacity 0.3s ease, padding 0.3s ease;
+            opacity: 1;
+            padding-top: 12px;
+        }
+        .customer-stats-content.collapsed {
+            max-height: 0;
+            opacity: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+        }
+        .customer-group {
+            background: white;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 10px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            border-left: 4px solid #cbd5e1;
+        }
+        .customer-group.dlt { border-left-color: #2563eb; }
+        .customer-group.retail { border-left-color: #16a34a; }
+        .customer-group.marketplace { border-left-color: #7c3aed; }
+        .customer-group.brak { border-left-color: #dc2626; }
+        .customer-group-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .customer-group-title .count {
+            background: #e2e8f0;
+            color: #475569;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .subcustomer-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 8px;
+        }
+        .subcustomer-card {
+            background: #f8fafc;
+            border-radius: 6px;
+            padding: 10px;
+            text-align: center;
+            border: 1px solid #e2e8f0;
+        }
+        .subcustomer-card .name {
+            font-size: 12px;
+            color: #64748b;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .subcustomer-card .value {
+            font-size: 22px;
+            font-weight: bold;
+            color: #1e40af;
+        }
+        .subcustomer-card .label {
+            font-size: 10px;
+            color: #94a3b8;
+            margin-top: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📋 НПП — Регистр заявок (Направление предпродажной подготовки)</h1>
+
+        <div class="stats" id="stats">
+            <div class="stat-card"><div class="number" id="stat-total">0</div><div class="label">Всего заявок</div></div>
+            <div class="stat-card"><div class="number" id="stat-new">0</div><div class="label">Новые</div></div>
+            <div class="stat-card"><div class="number" id="stat-work">0</div><div class="label">В работе</div></div>
+            <div class="stat-card"><div class="number" id="stat-done">0</div><div class="label">Выполнено</div></div>
+            <div class="stat-card"><div class="number" id="stat-avg">0</div><div class="label">Среднее время (дн)</div></div>
+        </div>
+
+        <div class="customer-stats" id="customer-stats">
+            <div class="customer-stats-header" onclick="toggleCustomerStats()">
+                <span class="arrow" id="customer-stats-arrow">▼</span>
+                <span>📊 Статистика по заказчикам</span>
+            </div>
+            <div class="customer-stats-content collapsed" id="customer-stats-content">
+                <div class="customer-group dlt">
+                    <div class="customer-group-title">🏢 ДЛТ <span class="count" id="dlt-count">0 заявок</span></div>
+                    <div class="subcustomer-grid" id="dlt-grid"></div>
+                </div>
+                <div class="customer-group retail">
+                    <div class="customer-group-title">🏪 РИТЕЙЛ <span class="count" id="retail-count">0 заявок</span></div>
+                    <div class="subcustomer-grid" id="retail-grid"></div>
+                </div>
+                <div class="customer-group marketplace">
+                    <div class="customer-group-title">🛒 МАРКЕТПЛЕЙС <span class="count" id="marketplace-count">0 заявок</span></div>
+                    <div class="subcustomer-grid" id="marketplace-grid"></div>
+                </div>
+                <div class="customer-group brak">
+                    <div class="customer-group-title">⚠️ БРАК <span class="count" id="brak-count">0 заявок</span></div>
+                    <div class="subcustomer-grid" id="brak-grid"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="toolbar">
+            <button class="btn-add" onclick="openModal()">➕ Добавить заявку</button>
+            <button class="btn-import" onclick="toggleImport()">📥 Импорт из Excel</button>
+            <button class="btn-template" onclick="downloadTemplate()">📄 Шаблон Excel</button>
+            <button class="btn-export" onclick="exportToExcel()">📤 Экспорт в Excel</button>
+            <button class="btn-delete" onclick="deleteSelected()" style="background:#ef4444;color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px;">🗑️ Удалить выделенные</button>
+            <button class="btn-clear" onclick="clearAll()">🗑️ Очистить все</button>
+            <button class="btn-reset" onclick="resetFilters()">🔄 Сбросить фильтры</button>
+        </div>
+
+        <div class="import-area" id="import-area">
+            <h3 style="font-size:14px;color:#374151;margin-bottom:10px">Импорт заявок из Excel</h3>
+            <div class="import-dropzone" id="import-dropzone" onclick="document.getElementById('import-file').click()"
+                 ondragover="event.preventDefault();this.classList.add('dragover')"
+                 ondragleave="this.classList.remove('dragover')"
+                 ondrop="handleDrop(event)">
+                <div class="icon">📁</div>
+                <div class="text">Нажмите или перетащите Excel-файл сюда</div>
+                <div class="subtext">Поддерживаются форматы .xlsx, .xls, .csv</div>
+            </div>
+            <input type="file" id="import-file" class="import-file-input" accept=".xlsx,.xls,.csv" onchange="handleFileSelect(event)">
+            <div class="import-results" id="import-results"></div>
+        </div>
+
+        <div class="filters-panel" id="filters-panel">
+            <h3 onclick="toggleFilters()" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
+                <span>🔍 Фильтры и сортировка</span>
+                <span id="filters-toggle-icon" class="collapsed" style="font-size:12px;transition:transform 0.3s;">▼</span>
+            </h3>
+            <div class="filters-grid collapsed" id="filters-content">
+                <div class="filter-group">
+                    <label>Поиск по тексту</label>
+                    <input type="text" id="filter-text" placeholder="Введите текст..." oninput="renderTable()">
+                </div>
+                <div class="filter-group">
+                    <label>Статус</label>
+                    <select id="filter-status" onchange="renderTable()">
+                        <option value="">Все статусы</option>
+                        <option value="Новый">Новый</option>
+                        <option value="В работе на приемке">В работе на приемке</option>
+                        <option value="Передан на производство">Передан на производство</option>
+                        <option value="В работе на производстве">В работе на производстве</option>
+                        <option value="В работе у операторов">В работе у операторов</option>
+                        <option value="Выполнен">Выполнен</option>
+                        <option value="Отгружено">Отгружено</option>
+                        <option value="Заявка удалена">Заявка удалена</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>Заказчик</label>
+                    <select id="filter-customer" onchange="renderTable()">
+                        <option value="">Все заказчики</option>
+                        <option value="ритейл">ритейл</option>
+                        <option value="ДЛТ">ДЛТ</option>
+                        <option value="маркетплейс">маркетплейс</option>
+                        <option value="Брак">Брак</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>Исполнитель</label>
+                    <select id="filter-ispolnitel" onchange="renderTable()">
+                        <option value="">Все исполнители</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>Дата поступления</label>
+                    <div class="period-row">
+                        <span class="date-label">с</span>
+                        <input type="date" id="filter-date-from" onchange="renderTable()">
+                        <span class="date-label">по</span>
+                        <input type="date" id="filter-date-to" onchange="renderTable()">
+                    </div>
+                </div>
+                <div class="filter-group">
+                    <label>Дата передачи на производство</label>
+                    <div class="period-row">
+                        <span class="date-label">с</span>
+                        <input type="date" id="filter-prod-from" onchange="renderTable()">
+                        <span class="date-label">по</span>
+                        <input type="date" id="filter-prod-to" onchange="renderTable()">
+                    </div>
+                </div>
+                <div class="filter-group">
+                    <label>Дата готовности</label>
+                    <div class="period-row">
+                        <span class="date-label">с</span>
+                        <input type="date" id="filter-ready-from" onchange="renderTable()">
+                        <span class="date-label">по</span>
+                        <input type="date" id="filter-ready-to" onchange="renderTable()">
+                    </div>
+                </div>
+                <div class="filter-group">
+                    <label>Время выполнения (дни)</label>
+                    <select id="filter-days" onchange="renderTable()">
+                        <option value="">Все</option>
+                        <option value="fast">Быстрые (≤ 5 дней)</option>
+                        <option value="slow">Долгие (> 5 дней)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-outer">
+            <div class="table-inner">
+                <table id="main-table">
+                    <thead>
+                        <tr>
+                            <th style="width:30px" onclick="sortTable('none')"><input type="checkbox" class="checkbox" id="select-all" onclick="event.stopPropagation(); toggleSelectAll()"></th>
+                            <th style="min-width:280px" onclick="sortTable('zayavka')">Заявка<span class="sort-icon">⇅</span></th>
+                            <th style="width:110px" onclick="sortTable('datePost')">Дата поступления<span class="sort-icon">⇅</span></th>
+                            <th style="width:80px" onclick="sortTable('mesta')">Количество мест<span class="sort-icon">⇅</span></th>
+                            <th onclick="sortTable('artPlan')">Артикул (кол-во) (План)<span class="sort-icon">⇅</span></th>
+                            <th onclick="sortTable('artFact')">Артикул (кол-во) (Факт)<span class="sort-icon">⇅</span></th>
+                            <th onclick="sortTable('syrPlan')">Единиц сырья (План)<span class="sort-icon">⇅</span></th>
+                            <th onclick="sortTable('syrFact')">Единиц сырья (Факт)<span class="sort-icon">⇅</span></th>
+                            <th style="width:180px" onclick="sortTable('status')">Статус<span class="sort-icon">⇅</span></th>
+                            <th style="width:140px" onclick="sortTable('dateProd')">Дата передачи на производство<span class="sort-icon">⇅</span></th>
+                            <th style="width:110px" onclick="sortTable('dateReady')">Дата готовности<span class="sort-icon">⇅</span></th>
+                            <th style="width:90px" onclick="sortTable('days')">Время выполнения (дни)<span class="sort-icon">⇅</span></th>
+                            <th onclick="sortTable('ispolnitel')">Исполнитель<span class="sort-icon">⇅</span></th>
+                            <th onclick="sortTable('comment')">Комментарий<span class="sort-icon">⇅</span></th>
+                            <th onclick="sortTable('customer')">Заказчик<span class="sort-icon">⇅</span></th>
+                            <th onclick="sortTable('otchet')">Заявки с отчета<span class="sort-icon">⇅</span></th>
+                            <th onclick="sortTable('id')">Идентификатор<span class="sort-icon">⇅</span></th>
+                            <th style="width:100px" onclick="sortTable('dateFromName')">Дата заявки<span class="sort-icon">⇅</span></th>
+                            <th style="width:80px" onclick="sortTable('none')">Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal">
+        <div class="modal">
+            <h2>Добавить / Редактировать заявку</h2>
+            <div class="form-group">
+                <label>Название заявки</label>
+                <input type="text" id="modal-zayavka" placeholder="Например: ДЛТ-Заявка от 15.06.2024">
+            </div>
+            <div class="form-group">
+                <label>Дата поступления</label>
+                <input type="date" id="modal-date-post">
+            </div>
+            <div class="form-group">
+                <label>Количество мест</label>
+                <input type="number" id="modal-mesta" min="0">
+            </div>
+            <div class="form-group">
+                <label>Артикул (кол-во) (План)</label>
+                <input type="text" id="modal-art-plan">
+            </div>
+            <div class="form-group">
+                <label>Артикул (кол-во) (Факт)</label>
+                <input type="text" id="modal-art-fact">
+            </div>
+            <div class="form-group">
+                <label>Единиц сырья (План)</label>
+                <input type="number" id="modal-syr-plan" min="0">
+            </div>
+            <div class="form-group">
+                <label>Единиц сырья (Факт)</label>
+                <input type="number" id="modal-syr-fact" min="0">
+            </div>
+            <div class="form-group">
+                <label>Статус</label>
+                <select id="modal-status">
+                    <option value="Новый">Новый</option>
+                    <option value="В работе на приемке">В работе на приемке</option>
+                    <option value="Передан на производство">Передан на производство</option>
+                    <option value="В работе на производстве">В работе на производстве</option>
+                    <option value="В работе у операторов">В работе у операторов</option>
+                    <option value="Выполнен">Выполнен</option>
+                    <option value="Отгружено">Отгружено</option>
+                    <option value="Заявка удалена">Заявка удалена</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Дата передачи на производство</label>
+                <input type="date" id="modal-date-prod">
+            </div>
+            <div class="form-group">
+                <label>Дата готовности</label>
+                <input type="date" id="modal-date-ready">
+            </div>
+            <div class="form-group">
+                <label>Исполнитель</label>
+                <input type="text" id="modal-ispolnitel">
+            </div>
+            <div class="form-group">
+                <label>Комментарий</label>
+                <textarea id="modal-comment"></textarea>
+            </div>
+            <div class="form-group">
+                <label>Заявки с отчета</label>
+                <input type="text" id="modal-otchet">
+            </div>
+            <div class="form-group">
+                <label>Идентификатор</label>
+                <input type="text" id="modal-id">
+            </div>
+            <div class="modal-buttons">
+                <button class="btn-cancel" onclick="closeModal()">Отмена</button>
+                <button class="btn-save" onclick="saveModal()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+<script>
+// ==================== DATA ====================
+let orders = JSON.parse(localStorage.getItem('npp_orders')) || [];
+let editingId = null;
+let sortState = { column: 'datePost', direction: 'desc' };
+
+const STATUS_ORDER = ['Новый', 'В работе на приемке', 'Передан на производство', 'В работе на производстве', 'В работе у операторов', 'Выполнен', 'Отгружено', 'Заявка удалена'];
+
+const STATUS_COLORS = {
+    'Новый': 'status-new',
+    'В работе на приемке': 'status-priemka',
+    'Передан на производство': 'status-proizvodstvo-passed',
+    'В работе на производстве': 'status-proizvodstvo-work',
+    'В работе у операторов': 'status-operators',
+    'Выполнен': 'status-done',
+    'Отгружено': 'status-shipped',
+    'Заявка удалена': 'status-deleted'
+};
+
+// ==================== UTILS ====================
+function formatDate(d) {
+    if (!d) return '';
+    const date = new Date(d);
+    if (isNaN(date)) return d;
+    return date.toLocaleDateString('ru-RU');
+}
+
+function parseDate(d) {
+    if (!d) return null;
+    const parts = d.split('.');
+    if (parts.length === 3) {
+        const day = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const year = parseInt(parts[2], 10);
+        const date = new Date(year, month, day);
+        if (!isNaN(date) && date.getDate() === day && date.getMonth() === month) {
+            return date;
+        }
+    }
+    const isoParts = d.split('-');
+    if (isoParts.length === 3) {
+        const year = parseInt(isoParts[0], 10);
+        const month = parseInt(isoParts[1], 10) - 1;
+        const day = parseInt(isoParts[2], 10);
+        const date = new Date(year, month, day);
+        if (!isNaN(date) && date.getDate() === day && date.getMonth() === month) {
+            return date;
+        }
+    }
+    const date = new Date(d);
+    return isNaN(date) ? null : date;
+}
+
+function toISODate(d) {
+    if (!d) return '';
+    const date = new Date(d);
+    if (isNaN(date)) return d;
+    return date.toISOString().split('T')[0];
+}
+
+function todayStr() {
+    const d = new Date();
+    return d.toISOString().split('T')[0];
+}
+
+// FIXED: workingDays now skips calculation for deleted orders
+function workingDays(start, end, status) {
+    if (status === 'Заявка удалена') return null;
+    if (!start || !end) return null;
+    const s = parseDate(start);
+    const e = parseDate(end);
+    if (!s || !e || isNaN(s.getTime()) || isNaN(e.getTime())) return null;
+    if (e < s) return null;
+    let days = 0;
+    const cur = new Date(s);
+    while (cur <= e) {
+        const dow = cur.getDay();
+        if (dow !== 0 && dow !== 6) days++;
+        cur.setDate(cur.getDate() + 1);
+    }
+    return days;
+}
+
+function detectCustomer(name) {
+    if (!name) return '';
+    const n = name.toString().trim();
+    if (/брак/i.test(n)) return 'Брак';
+    if (/^ДЛТ/i.test(n)) return 'ДЛТ';
+    if (/Ozon|WB|ЯМ|Яндекс|Wildberries/i.test(n)) return 'маркетплейс';
+    if (/^[0-9]/.test(n)) return 'ритейл';
+    return '';
+}
+
+function extractDateFromName(name) {
+    if (!name) return '';
+    const n = name.toString();
+
+    // Full date: DD.MM.YYYY or DD/MM/YYYY or DD-MM-YYYY
+    const m1 = n.match(/([0-9]{2})[./-]([0-9]{2})[./-]([0-9]{4})/);
+    if (m1) return `${m1[1]}.${m1[2]}.${m1[3]}`;
+
+    // Full date: YYYY.MM.DD or YYYY/MM/DD or YYYY-MM-DD
+    const m2 = n.match(/([0-9]{4})[./-]([0-9]{2})[./-]([0-9]{2})/);
+    if (m2) return `${m2[3]}.${m2[2]}.${m2[1]}`;
+
+    // Full date: D.M.YYYY (single digit day/month)
+    const m3 = n.match(/([0-9]{1,2})[./-]([0-9]{1,2})[./-]([0-9]{4})/);
+    if (m3) {
+        const d = m3[1].padStart(2, '0');
+        const mon = m3[2].padStart(2, '0');
+        return `${d}.${mon}.${m3[3]}`;
+    }
+
+    // Short date: DD.MM or DD/MM or DD-MM (day.month, assume current year)
+    const m4 = n.match(/([0-9]{2})[./-]([0-9]{2})(?![./-][0-9])/);
+    if (m4) {
+        const currentYear = new Date().getFullYear();
+        return `${m4[1]}.${m4[2]}.${currentYear}`;
+    }
+
+    // Short date: D.M or D/M or D-M (single digit day/month, assume current year)
+    const m5 = n.match(/([0-9]{1,2})[./-]([0-9]{1,2})(?![./-][0-9])/);
+    if (m5) {
+        const currentYear = new Date().getFullYear();
+        const d = m5[1].padStart(2, '0');
+        const mon = m5[2].padStart(2, '0');
+        return `${d}.${mon}.${currentYear}`;
+    }
+
+    return '';
+}
+
+// NEW: generateIdentifier extracts platform or leading digits from request name
+function generateIdentifier(name) {
+    if (!name) return '';
+    const n = name.toString().trim();
+    // Check for WB (case insensitive, as separate word or at start/end)
+    if (/WB/i.test(n)) return 'WB';
+    // Check for Ozon (case insensitive)
+    if (/Ozon/i.test(n)) return 'ozon';
+    // Check for ДЛТ (case insensitive, Cyrillic)
+    if (/ДЛТ/i.test(n)) return 'ДЛТ';
+    // Extract leading digits
+    const digitsMatch = n.match(/^(\d+)/);
+    if (digitsMatch) return digitsMatch[1];
+    return '';
+}
+
+function generateId() {
+    return 'ID-' + Date.now().toString(36).toUpperCase();
+}
+
+function saveData() {
+    localStorage.setItem('npp_orders', JSON.stringify(orders));
+}
+
+let toastTimeout = null;
+function showToast(msg, type='success') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast show ' + type;
+    if (toastTimeout) clearTimeout(toastTimeout);
+    toastTimeout = setTimeout(() => t.className = 'toast', 3000);
+}
+
+function dateInRange(dateStr, fromStr, toStr) {
+    if (!dateStr) return false;
+    const date = parseDate(dateStr);
+    if (!date) return false;
+    if (fromStr) {
+        const from = parseDate(fromStr);
+        if (from && date < from) return false;
+    }
+    if (toStr) {
+        const to = parseDate(toStr);
+        if (to) {
+            to.setHours(23, 59, 59, 999);
+            if (date > to) return false;
+        }
+    }
+    return true;
+}
+
+// ==================== IMPORT FROM EXCEL ====================
+function toggleImport() {
+    document.getElementById('import-area').classList.toggle('active');
+}
+
+function handleDrop(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    document.getElementById('import-dropzone').classList.remove('dragover');
+    const files = e.dataTransfer.files;
+    if (files.length > 0) processExcelFile(files[0]);
+}
+
+function handleFileSelect(e) {
+    const files = e.target.files;
+    if (files.length > 0) processExcelFile(files[0]);
+}
+
+function processExcelFile(file) {
+    if (typeof XLSX === 'undefined') {
+        showToast('Ошибка: библиотека Excel не загружена. Проверьте подключение к интернету.', 'error');
+        return;
+    }
+    const results = document.getElementById('import-results');
+    results.className = 'import-results';
+    results.textContent = 'Чтение файла...';
+    results.classList.add('active');
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+            const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' });
+
+            if (jsonData.length < 2) {
+                results.className = 'import-results error';
+                results.textContent = 'Файл пустой или не содержит данных';
+                return;
+            }
+
+            const headers = jsonData[0].map(h => String(h).trim().toLowerCase());
+            const headerMap = {
+                'заявка': 'zayavka',
+                'дата поступления': 'datePost',
+                'количество мест': 'mesta',
+                'артикул (кол-во) (план)': 'artPlan',
+                'артикул (кол-во) (факт)': 'artFact',
+                'единиц сырья (план)': 'syrPlan',
+                'единиц сырья (факт)': 'syrFact',
+                'статус': 'status',
+                'дата передачи на производство': 'dateProd',
+                'дата готовности': 'dateReady',
+                'время выполнения (дни)': 'days',
+                'исполнитель': 'ispolnitel',
+                'комментарий': 'comment',
+                'заказчик': 'customer',
+                'заявки с отчета': 'otchet',
+                'идентификатор': 'id',
+                'дата заявки': 'dateFromName'
+            };
+
+            const flexibleMap = {};
+            headers.forEach((h, idx) => {
+                const clean = h.replace(/[()]/g, '').replace(/[\s]+/g, ' ').trim().toLowerCase();
+                for (const [key, val] of Object.entries(headerMap)) {
+                    const keyClean = key.replace(/[()]/g, '').replace(/[\s]+/g, ' ').trim().toLowerCase();
+                    if (h === key || clean === keyClean || clean.includes(keyClean) || keyClean.includes(clean)) {
+                        flexibleMap[idx] = val;
+                        break;
+                    }
+                }
+            });
+
+            let imported = 0;
+            let skipped = 0;
+
+            for (let i = 1; i < jsonData.length; i++) {
+                const row = jsonData[i];
+                if (!row || row.length === 0 || !row[0]) { skipped++; continue; }
+
+                const order = {
+                    zayavka: '', datePost: '', mesta: '', artPlan: '', artFact: '',
+                    syrPlan: '', syrFact: '', status: 'Новый', dateProd: '', dateReady: '',
+                    ispolnitel: '', comment: '', otchet: '', id: generateId()
+                };
+
+                row.forEach((cell, idx) => {
+                    if (flexibleMap[idx] && cell !== undefined && cell !== '') {
+                        let val = cell;
+                        if (typeof val === 'number' && val > 40000 && val < 50000) {
+                            const excelEpoch = new Date(1899, 11, 30);
+                            const date = new Date(excelEpoch.getTime() + val * 24 * 60 * 60 * 1000);
+                            val = date.toISOString().split('T')[0];
+                        }
+                        let strVal = String(val).trim();
+                        // Normalize status value: fix case, extra spaces, common typos
+                        if (flexibleMap[idx] === 'status') {
+                            const statusNorm = {
+                                'новый': 'Новый',
+                                'новая': 'Новый',
+                                'new': 'Новый',
+                                'в работе на приемке': 'В работе на приемке',
+                                'приемка': 'В работе на приемке',
+                                'передан на производство': 'Передан на производство',
+                                'на производство': 'Передан на производство',
+                                'производство передан': 'Передан на производство',
+                                'в работе на производстве': 'В работе на производстве',
+                                'производство': 'В работе на производстве',
+                                'в работе у операторов': 'В работе у операторов',
+                                'операторы': 'В работе у операторов',
+                                'выполнен': 'Выполнен',
+                                'выполнена': 'Выполнен',
+                                'готово': 'Выполнен',
+                                'done': 'Выполнен',
+                                'отгружено': 'Отгружено',
+                                'отгружен': 'Отгружено',
+                                'отправлено': 'Отгружено',
+                                'shipped': 'Отгружено',
+                                'заявка удалена': 'Заявка удалена',
+                                'удалена': 'Заявка удалена',
+                                'удален': 'Заявка удалена',
+                                'deleted': 'Заявка удалена'
+                            };
+                            const lowerVal = strVal.toLowerCase().replace(/\s+/g, ' ').trim();
+                            if (statusNorm[lowerVal]) {
+                                strVal = statusNorm[lowerVal];
+                            } else {
+                                // Try partial match
+                                for (const [key, normVal] of Object.entries(statusNorm)) {
+                                    if (lowerVal.includes(key) || key.includes(lowerVal)) {
+                                        strVal = normVal;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        order[flexibleMap[idx]] = strVal;
+                    }
+                });
+
+                if (order.status && !STATUS_COLORS.hasOwnProperty(order.status)) {
+                    // Try one more normalization before falling back
+                    const finalNorm = {
+                        'новый': 'Новый', 'новая': 'Новый', 'new': 'Новый',
+                        'в работе на приемке': 'В работе на приемке', 'приемка': 'В работе на приемке',
+                        'передан на производство': 'Передан на производство',
+                        'в работе на производстве': 'В работе на производстве',
+                        'в работе у операторов': 'В работе у операторов', 'операторы': 'В работе у операторов',
+                        'выполнен': 'Выполнен', 'выполнена': 'Выполнен', 'готово': 'Выполнен', 'done': 'Выполнен',
+                        'заявка удалена': 'Заявка удалена', 'удалена': 'Заявка удалена', 'удален': 'Заявка удалена', 'deleted': 'Заявка удалена'
+                    };
+                    const lowerStatus = order.status.toLowerCase().replace(/\s+/g, ' ').trim();
+                    if (finalNorm[lowerStatus]) {
+                        order.status = finalNorm[lowerStatus];
+                    } else {
+                        order.status = 'Новый';
+                    }
+                }
+
+                // Auto-generate identifier from name if not provided
+                if (!order.id || order.id === generateId()) {
+                    order.id = generateIdentifier(order.zayavka) || generateId();
+                }
+
+                if (order.zayavka) {
+                    orders.push(order);
+                    imported++;
+                } else {
+                    skipped++;
+                }
+            }
+
+            saveData();
+            renderTable();
+            results.className = 'import-results';
+            results.textContent = `Импорт завершен: ${imported} заявок добавлено, ${skipped} пропущено`;
+            showToast(`Импортировано ${imported} заявок`, 'success');
+
+        } catch (err) {
+            results.className = 'import-results error';
+            results.textContent = 'Ошибка чтения файла: ' + err.message;
+            showToast('Ошибка импорта', 'error');
+        }
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+function downloadTemplate() {
+    if (typeof XLSX === 'undefined') {
+        showToast('Ошибка: библиотека Excel не загружена. Проверьте подключение к интернету.', 'error');
+        return;
+    }
+    try {
+        const templateData = [
+            ['Заявка', 'Дата поступления', 'Количество мест', 'Артикул (кол-во) (План)', 'Артикул (кол-во) (Факт)',
+             'Единиц сырья (План)', 'Единиц сырья (Факт)', 'Статус', 'Дата передачи на производство', 'Дата готовности',
+             'Исполнитель', 'Комментарий', 'Заявки с отчета', 'Идентификатор']
+        ];
+
+        const ws = XLSX.utils.aoa_to_sheet(templateData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Заявки');
+        XLSX.writeFile(wb, 'Шаблон_НПП_Заявок.xlsx');
+        showToast('Шаблон скачан');
+    } catch (err) {
+        showToast('Ошибка скачивания шаблона: ' + err.message, 'error');
+        console.error(err);
+    }
+}
+
+// ==================== FILTER UTILS ====================
+function updateIspolnitelFilter() {
+    const select = document.getElementById('filter-ispolnitel');
+    const currentVal = select.value;
+    const ispolniteli = [...new Set(orders.map(o => o.ispolnitel).filter(Boolean))].sort();
+    select.innerHTML = '<option value="">Все исполнители</option>';
+    ispolniteli.forEach(i => {
+        const opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = i;
+        select.appendChild(opt);
+    });
+    select.value = currentVal;
+}
+
+function resetFilters() {
+    document.getElementById('filter-text').value = '';
+    document.getElementById('filter-status').value = '';
+    document.getElementById('filter-customer').value = '';
+    document.getElementById('filter-ispolnitel').value = '';
+    document.getElementById('filter-date-from').value = '';
+    document.getElementById('filter-date-to').value = '';
+    document.getElementById('filter-prod-from').value = '';
+    document.getElementById('filter-prod-to').value = '';
+    document.getElementById('filter-ready-from').value = '';
+    document.getElementById('filter-ready-to').value = '';
+    document.getElementById('filter-days').value = '';
+    sortState = { column: null, direction: 'asc' };
+    document.querySelectorAll('th').forEach(th => th.classList.remove('sort-asc', 'sort-desc'));
+    renderTable();
+    showToast('Фильтры сброшены');
+}
+
+// ==================== SORTING ====================
+function sortTable(column) {
+    if (column === 'none') return;
+
+    if (sortState.column === column) {
+        sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortState.column = column;
+        sortState.direction = 'asc';
+    }
+
+    document.querySelectorAll('th').forEach(th => th.classList.remove('sort-asc', 'sort-desc'));
+    const headers = document.querySelectorAll('th');
+    const colMap = {
+        'zayavka': 1, 'datePost': 2, 'mesta': 3, 'artPlan': 4, 'artFact': 5,
+        'syrPlan': 6, 'syrFact': 7, 'status': 8, 'dateProd': 9, 'dateReady': 10,
+        'days': 11, 'ispolnitel': 12, 'comment': 13, 'customer': 14, 'otchet': 15,
+        'id': 16, 'dateFromName': 17
+    };
+    if (colMap[column] !== undefined && headers[colMap[column]]) {
+        headers[colMap[column]].classList.add(sortState.direction === 'asc' ? 'sort-asc' : 'sort-desc');
+    }
+
+    renderTable();
+}
+
+function getSortValue(order, column) {
+    switch(column) {
+        case 'zayavka': return (order.zayavka || '').toLowerCase();
+        case 'datePost': return parseDate(order.datePost)?.getTime() || 0;
+        case 'mesta': return parseFloat(order.mesta) || 0;
+        case 'artPlan': return (order.artPlan || '').toLowerCase();
+        case 'artFact': return (order.artFact || '').toLowerCase();
+        case 'syrPlan': return parseFloat(order.syrPlan) || 0;
+        case 'syrFact': return parseFloat(order.syrFact) || 0;
+        case 'status': return STATUS_ORDER.indexOf(order.status) !== -1 ? STATUS_ORDER.indexOf(order.status) : 999;
+        case 'dateProd': return parseDate(order.dateProd)?.getTime() || 0;
+        case 'dateReady': return parseDate(order.dateReady)?.getTime() || 0;
+        case 'days': return workingDays(order.datePost, order.dateReady, order.status) ?? -1;
+        case 'ispolnitel': return (order.ispolnitel || '').toLowerCase();
+        case 'comment': return (order.comment || '').toLowerCase();
+        case 'customer': return detectCustomer(order.zayavka).toLowerCase();
+        case 'otchet': return (order.otchet || '').toLowerCase();
+        case 'id': return (order.id || '').toLowerCase();
+        case 'dateFromName': {
+            const d = extractDateFromName(order.zayavka);
+            return parseDate(d)?.getTime() || 0;
+        }
+        default: return 0;
+    }
+}
+
+// ==================== TABLE RENDERING ====================
+function renderTable() {
+    const tbody = document.getElementById('table-body');
+    const filterText = document.getElementById('filter-text').value.toLowerCase();
+    const filterStatus = document.getElementById('filter-status').value;
+    const filterCustomer = document.getElementById('filter-customer').value;
+    const filterIspolnitel = document.getElementById('filter-ispolnitel').value;
+    const filterDateFrom = document.getElementById('filter-date-from').value;
+    const filterDateTo = document.getElementById('filter-date-to').value;
+    const filterProdFrom = document.getElementById('filter-prod-from').value;
+    const filterProdTo = document.getElementById('filter-prod-to').value;
+    const filterReadyFrom = document.getElementById('filter-ready-from').value;
+    const filterReadyTo = document.getElementById('filter-ready-to').value;
+    const filterDays = document.getElementById('filter-days').value;
+
+    let filtered = orders.map((o, idx) => ({ ...o, _originalIndex: idx })).filter(o => {
+        if (filterText) {
+            const search = Object.values(o).join(' ').toLowerCase();
+            if (!search.includes(filterText)) return false;
+        }
+        if (filterStatus && o.status !== filterStatus) return false;
+        if (filterCustomer && detectCustomer(o.zayavka) !== filterCustomer) return false;
+        if (filterIspolnitel && o.ispolnitel !== filterIspolnitel) return false;
+        if (filterDateFrom || filterDateTo) {
+            if (!dateInRange(o.datePost, filterDateFrom, filterDateTo)) return false;
+        }
+        if (filterProdFrom || filterProdTo) {
+            if (!dateInRange(o.dateProd, filterProdFrom, filterProdTo)) return false;
+        }
+        if (filterReadyFrom || filterReadyTo) {
+            if (!dateInRange(o.dateReady, filterReadyFrom, filterReadyTo)) return false;
+        }
+        if (filterDays) {
+            const days = workingDays(o.datePost, o.dateReady, o.status);
+            if (days === null) return false;
+            if (filterDays === 'fast' && days > 5) return false;
+            if (filterDays === 'slow' && days <= 5) return false;
+        }
+        return true;
+    });
+
+    if (sortState.column) {
+        filtered.sort((a, b) => {
+            let valA = getSortValue(a, sortState.column);
+            let valB = getSortValue(b, sortState.column);
+            if (typeof valA === 'string') { valA = valA || ''; valB = valB || ''; }
+            if (valA < valB) return sortState.direction === 'asc' ? -1 : 1;
+            if (valA > valB) return sortState.direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+    }
+
+    tbody.innerHTML = '';
+
+    filtered.forEach((o) => {
+        const realIdx = o._originalIndex;
+        const colorClass = STATUS_COLORS[o.status] || 'status-new';
+        // FIXED: Pass status to workingDays to skip deleted orders
+        const days = workingDays(o.datePost, o.dateReady, o.status);
+        const daysClass = days !== null && days <= 5 ? 'green' : (days !== null && days > 5 ? 'red' : '');
+        const customer = detectCustomer(o.zayavka);
+        const dateFromName = extractDateFromName(o.zayavka);
+        // FIXED: Auto-generate identifier if empty
+        const identifier = (o.id && !o.id.startsWith('ID-')) ? o.id : (generateIdentifier(o.zayavka) || o.id || '');
+
+        const tr = document.createElement('tr');
+        tr.className = colorClass;
+
+        const esc = (str) => {
+            if (str === null || str === undefined) return '';
+            return String(str).replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+        };
+
+        tr.innerHTML = `
+            <td><input type="checkbox" class="checkbox row-check" data-idx="${realIdx}"></td>
+            <td style="min-width:280px"><input class="cell-input" value="${esc(o.zayavka)}" onchange="updateField(${realIdx}, 'zayavka', this.value)" style="min-width:260px"></td>
+            <td><input type="date" class="cell-input date" value="${esc(o.datePost)}" onchange="updateField(${realIdx}, 'datePost', this.value)"></td>
+            <td><input type="number" class="cell-input number" value="${esc(o.mesta)}" onchange="updateField(${realIdx}, 'mesta', this.value)"></td>
+            <td><input class="cell-input" value="${esc(o.artPlan)}" onchange="updateField(${realIdx}, 'artPlan', this.value)"></td>
+            <td><input class="cell-input" value="${esc(o.artFact)}" onchange="updateField(${realIdx}, 'artFact', this.value)"></td>
+            <td><input type="number" class="cell-input number" value="${esc(o.syrPlan)}" onchange="updateField(${realIdx}, 'syrPlan', this.value)"></td>
+            <td><input type="number" class="cell-input number" value="${esc(o.syrFact)}" onchange="updateField(${realIdx}, 'syrFact', this.value)"></td>
+            <td>
+                <select class="status-select ${colorClass}" onchange="updateStatus(${realIdx}, this.value)">
+                    ${Object.keys(STATUS_COLORS).map(s => `<option value="${esc(s)}" ${o.status===s?'selected':''}>${esc(s)}</option>`).join('')}
+                </select>
+            </td>
+            <td><input type="date" class="cell-input date" value="${esc(o.dateProd)}" onchange="updateField(${realIdx}, 'dateProd', this.value)"></td>
+            <td><input type="date" class="cell-input date" value="${esc(o.dateReady)}" onchange="updateField(${realIdx}, 'dateReady', this.value)"></td>
+            <td><span class="cell-auto ${daysClass}">${days !== null ? days + ' дн' : ''}</span></td>
+            <td><input class="cell-input" value="${esc(o.ispolnitel)}" onchange="updateField(${realIdx}, 'ispolnitel', this.value)"></td>
+            <td><input class="cell-input" value="${esc(o.comment)}" onchange="updateField(${realIdx}, 'comment', this.value)"></td>
+            <td><span class="cell-auto">${esc(customer)}</span></td>
+            <td><input class="cell-input" value="${esc(o.otchet)}" onchange="updateField(${realIdx}, 'otchet', this.value)"></td>
+            <td><input class="cell-input" value="${esc(identifier)}" onchange="updateField(${realIdx}, 'id', this.value)"></td>
+            <td><span class="cell-auto">${esc(dateFromName)}</span></td>
+            <td class="actions">
+                <button class="btn-edit" onclick="editOrder(${realIdx})">✏️</button>
+                <button class="btn-delete" onclick="deleteOrder(${realIdx})">🗑️</button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    for (let i = 0; i < Math.max(0, 10 - filtered.length); i++) {
+        const tr = document.createElement('tr');
+        tr.className = 'empty-row';
+        tr.innerHTML = `<td colspan="19" style="border-bottom:1px dashed #e5e7eb"></td>`;
+        tbody.appendChild(tr);
+    }
+
+    updateStats(filtered);
+    updateIspolnitelFilter();
+}
+
+function updateStats(data) {
+    const total = data.length;
+    const novye = data.filter(o => o.status === 'Новый').length;
+    const work = data.filter(o => ['В работе на приемке','Передан на производство','В работе на производстве','В работе у операторов'].includes(o.status)).length;
+    const done = data.filter(o => o.status === 'Выполнен' || o.status === 'Отгружено').length;
+
+    // FIXED: Exclude deleted orders from average calculation
+    const completed = data.filter(o => o.status === 'Выполнен' && o.datePost && o.dateReady);
+    const avgDays = completed.length > 0 
+        ? (completed.reduce((sum, o) => sum + (workingDays(o.datePost, o.dateReady, o.status) || 0), 0) / completed.length).toFixed(1)
+        : '0';
+
+    document.getElementById('stat-total').textContent = total;
+    document.getElementById('stat-new').textContent = novye;
+    document.getElementById('stat-work').textContent = work;
+    document.getElementById('stat-done').textContent = done;
+    document.getElementById('stat-avg').textContent = avgDays;
+
+    updateCustomerStats(data);
+}
+
+function detectMarketplacePlatform(name) {
+    if (!name) return 'Другое';
+    const n = name.toString().trim().toLowerCase();
+    if (/\bwb\b/.test(n)) return 'WB';
+    if (/\bozon\b/.test(n)) return 'Ozon';
+    if (/\bям\b|\bяндекс\b|\byandex\b/.test(n)) return 'ЯМ';
+    return 'Другое';
+}
+
+function updateCustomerStats(data) {
+    // DLT
+    const dltOrders = data.filter(o => detectCustomer(o.zayavka) === 'ДЛТ');
+    document.getElementById('dlt-count').textContent = dltOrders.length + ' заявок';
+    renderCustomerGroup('dlt-grid', dltOrders, false);
+
+    // Retail
+    const retailOrders = data.filter(o => detectCustomer(o.zayavka) === 'ритейл');
+    document.getElementById('retail-count').textContent = retailOrders.length + ' заявок';
+    renderCustomerGroup('retail-grid', retailOrders, false);
+
+    // Marketplace with sub-breakdown
+    const mpOrders = data.filter(o => detectCustomer(o.zayavka) === 'маркетплейс');
+    document.getElementById('marketplace-count').textContent = mpOrders.length + ' заявок';
+    renderMarketplaceGrid('marketplace-grid', mpOrders);
+
+    // Brak
+    const brakOrders = data.filter(o => detectCustomer(o.zayavka) === 'Брак');
+    document.getElementById('brak-count').textContent = brakOrders.length + ' заявок';
+    renderCustomerGroup('brak-grid', brakOrders, false);
+}
+
+function renderCustomerGroup(gridId, orders, showSub) {
+    const grid = document.getElementById(gridId);
+    if (!grid) return;
+
+    const novye = orders.filter(o => o.status === 'Новый').length;
+    const work = orders.filter(o => ['В работе на приемке','Передан на производство','В работе на производстве','В работе у операторов'].includes(o.status)).length;
+    const done = orders.filter(o => o.status === 'Выполнен' || o.status === 'Отгружено').length;
+    const deleted = orders.filter(o => o.status === 'Заявка удалена').length;
+
+    grid.innerHTML = `
+        <div class="subcustomer-card"><div class="name">Новые</div><div class="value">${novye}</div></div>
+        <div class="subcustomer-card"><div class="name">В работе</div><div class="value">${work}</div></div>
+        <div class="subcustomer-card"><div class="name">Выполнено</div><div class="value">${done}</div></div>
+        <div class="subcustomer-card"><div class="name">Удалено</div><div class="value">${deleted}</div></div>
+    `;
+}
+
+function renderMarketplaceGrid(gridId, orders) {
+    const grid = document.getElementById(gridId);
+    if (!grid) return;
+
+    const platforms = {};
+    orders.forEach(o => {
+        const platform = detectMarketplacePlatform(o.zayavka);
+        if (!platforms[platform]) platforms[platform] = [];
+        platforms[platform].push(o);
+    });
+
+    let html = '';
+    for (const [platform, pOrders] of Object.entries(platforms)) {
+        const novye = pOrders.filter(o => o.status === 'Новый').length;
+        const work = pOrders.filter(o => ['В работе на приемке','Передан на производство','В работе на производстве','В работе у операторов'].includes(o.status)).length;
+        const done = pOrders.filter(o => o.status === 'Выполнен' || o.status === 'Отгружено').length;
+        const deleted = pOrders.filter(o => o.status === 'Заявка удалена').length;
+        html += `
+            <div class="subcustomer-card">
+                <div class="name">${platform}</div>
+                <div class="value">${pOrders.length}</div>
+                <div class="label">Н:${novye} | Р:${work} | В:${done} | У:${deleted}</div>
+            </div>
+        `;
+    }
+    grid.innerHTML = html || '<div class="subcustomer-card"><div class="name">Нет данных</div><div class="value">0</div></div>';
+}
+
+function toggleCustomerStats() {
+    const content = document.getElementById('customer-stats-content');
+    const arrow = document.getElementById('customer-stats-arrow');
+    content.classList.toggle('collapsed');
+    arrow.classList.toggle('collapsed');
+}
+
+// ==================== FIELD UPDATES ====================
+function updateField(idx, field, value) {
+    if (idx >= 0 && idx < orders.length) {
+        orders[idx][field] = value;
+        // Auto-update identifier when name changes
+        if (field === 'zayavka') {
+            const newId = generateIdentifier(value);
+            if (newId) orders[idx].id = newId;
+        }
+        saveData();
+        renderTable();
+    }
+}
+
+function updateStatus(idx, newStatus) {
+    if (idx >= 0 && idx < orders.length) {
+        orders[idx].status = newStatus;
+        if (newStatus === 'Передан на производство') {
+            if (!orders[idx].dateProd) {
+                orders[idx].dateProd = todayStr();
+                console.log('dateProd set to:', orders[idx].dateProd);
+            }
+        }
+        if ((newStatus === 'Выполнен' || newStatus === 'Заявка удалена') && !orders[idx].dateReady) {
+            orders[idx].dateReady = todayStr();
+        }
+        saveData();
+        renderTable();
+        showToast(`Статус изменен на "${newStatus}"`);
+    } else {
+        console.log('updateStatus: invalid idx', idx, 'orders length', orders.length);
+    }
+}
+
+// ==================== MODAL ====================
+function openModal() {
+    editingId = null;
+    document.getElementById('modal-zayavka').value = '';
+    document.getElementById('modal-date-post').value = todayStr();
+    document.getElementById('modal-mesta').value = '';
+    document.getElementById('modal-art-plan').value = '';
+    document.getElementById('modal-art-fact').value = '';
+    document.getElementById('modal-syr-plan').value = '';
+    document.getElementById('modal-syr-fact').value = '';
+    document.getElementById('modal-status').value = 'Новый';
+    document.getElementById('modal-date-prod').value = '';
+    document.getElementById('modal-date-ready').value = '';
+    document.getElementById('modal-ispolnitel').value = '';
+    document.getElementById('modal-comment').value = '';
+    document.getElementById('modal-otchet').value = '';
+    document.getElementById('modal-id').value = '';
+    document.getElementById('modal').classList.add('active');
+}
+
+function editOrder(idx) {
+    if (idx >= 0 && idx < orders.length) {
+        editingId = idx;
+        const o = orders[idx];
+        document.getElementById('modal-zayavka').value = o.zayavka || '';
+        document.getElementById('modal-date-post').value = o.datePost || '';
+        document.getElementById('modal-mesta').value = o.mesta || '';
+        document.getElementById('modal-art-plan').value = o.artPlan || '';
+        document.getElementById('modal-art-fact').value = o.artFact || '';
+        document.getElementById('modal-syr-plan').value = o.syrPlan || '';
+        document.getElementById('modal-syr-fact').value = o.syrFact || '';
+        document.getElementById('modal-status').value = o.status || 'Новый';
+        document.getElementById('modal-date-prod').value = o.dateProd || '';
+        document.getElementById('modal-date-ready').value = o.dateReady || '';
+        document.getElementById('modal-ispolnitel').value = o.ispolnitel || '';
+        document.getElementById('modal-comment').value = o.comment || '';
+        document.getElementById('modal-otchet').value = o.otchet || '';
+        document.getElementById('modal-id').value = o.id || '';
+        document.getElementById('modal').classList.add('active');
+    }
+}
+
+function closeModal() {
+    document.getElementById('modal').classList.remove('active');
+    editingId = null;
+}
+
+function saveModal() {
+    const name = document.getElementById('modal-zayavka').value;
+    const status = document.getElementById('modal-status').value;
+
+    const data = {
+        zayavka: name,
+        datePost: document.getElementById('modal-date-post').value,
+        mesta: document.getElementById('modal-mesta').value,
+        artPlan: document.getElementById('modal-art-plan').value,
+        artFact: document.getElementById('modal-art-fact').value,
+        syrPlan: document.getElementById('modal-syr-plan').value,
+        syrFact: document.getElementById('modal-syr-fact').value,
+        status: status,
+        dateProd: document.getElementById('modal-date-prod').value,
+        dateReady: document.getElementById('modal-date-ready').value,
+        ispolnitel: document.getElementById('modal-ispolnitel').value,
+        comment: document.getElementById('modal-comment').value,
+        otchet: document.getElementById('modal-otchet').value,
+        id: document.getElementById('modal-id').value || generateIdentifier(name) || generateId()
+    };
+
+    if (editingId !== null && editingId >= 0 && editingId < orders.length) {
+        // Editing existing order - preserve dates unless status triggers auto-set
+        const existing = orders[editingId];
+        data.dateProd = existing.dateProd || '';
+        data.dateReady = existing.dateReady || '';
+
+        if (status === 'Передан на производство' && !data.dateProd) {
+            data.dateProd = todayStr();
+        }
+        if ((status === 'Выполнен' || status === 'Заявка удалена') && !data.dateReady) {
+            data.dateReady = todayStr();
+        }
+
+        orders[editingId] = { ...existing, ...data };
+        showToast('Заявка обновлена');
+    } else {
+        // New order
+        data.dateProd = '';
+        data.dateReady = '';
+        if (status === 'Передан на производство') data.dateProd = todayStr();
+        if (status === 'Выполнен' || status === 'Заявка удалена') data.dateReady = todayStr();
+        orders.push(data);
+        showToast('Заявка добавлена');
+    }
+
+    saveData();
+    renderTable();
+    closeModal();
+}
+
+function deleteOrder(idx) {
+    if (idx >= 0 && idx < orders.length && confirm('Удалить заявку?')) {
+        orders.splice(idx, 1);
+        saveData();
+        renderTable();
+        showToast('Заявка удалена');
+    }
+}
+
+function clearAll() {
+    const password = prompt('Введите пароль для очистки всех заявок:');
+    if (password !== 'admin123') {
+        showToast('Неверный пароль', 'error');
+        return;
+    }
+    if (confirm('Очистить ВСЕ заявки? Это действие нельзя отменить!')) {
+        orders = [];
+        saveData();
+        renderTable();
+        showToast('Все заявки удалены');
+    }
+}
+
+function toggleSelectAll() {
+    const all = document.getElementById('select-all').checked;
+    document.querySelectorAll('.row-check').forEach(c => c.checked = all);
+}
+
+// ==================== EXPORT ====================
+function getFilteredData() {
+    const filterText = document.getElementById('filter-text').value.toLowerCase();
+    const filterStatus = document.getElementById('filter-status').value;
+    const filterCustomer = document.getElementById('filter-customer').value;
+    const filterIspolnitel = document.getElementById('filter-ispolnitel').value;
+    const filterDateFrom = document.getElementById('filter-date-from').value;
+    const filterDateTo = document.getElementById('filter-date-to').value;
+    const filterProdFrom = document.getElementById('filter-prod-from').value;
+    const filterProdTo = document.getElementById('filter-prod-to').value;
+    const filterReadyFrom = document.getElementById('filter-ready-from').value;
+    const filterReadyTo = document.getElementById('filter-ready-to').value;
+    const filterDays = document.getElementById('filter-days').value;
+
+    let filtered = orders.map((o, idx) => ({ ...o, _originalIndex: idx })).filter(o => {
+        if (filterText) {
+            const search = Object.values(o).join(' ').toLowerCase();
+            if (!search.includes(filterText)) return false;
+        }
+        if (filterStatus && o.status !== filterStatus) return false;
+        if (filterCustomer && detectCustomer(o.zayavka) !== filterCustomer) return false;
+        if (filterIspolnitel && o.ispolnitel !== filterIspolnitel) return false;
+        if (filterDateFrom || filterDateTo) {
+            if (!dateInRange(o.datePost, filterDateFrom, filterDateTo)) return false;
+        }
+        if (filterProdFrom || filterProdTo) {
+            if (!dateInRange(o.dateProd, filterProdFrom, filterProdTo)) return false;
+        }
+        if (filterReadyFrom || filterReadyTo) {
+            if (!dateInRange(o.dateReady, filterReadyFrom, filterReadyTo)) return false;
+        }
+        if (filterDays) {
+            const days = workingDays(o.datePost, o.dateReady, o.status);
+            if (days === null) return false;
+            if (filterDays === 'fast' && days > 5) return false;
+            if (filterDays === 'slow' && days <= 5) return false;
+        }
+        return true;
+    });
+
+    if (sortState.column) {
+        filtered.sort((a, b) => {
+            let valA = getSortValue(a, sortState.column);
+            let valB = getSortValue(b, sortState.column);
+            if (typeof valA === 'string') { valA = valA || ''; valB = valB || ''; }
+            if (valA < valB) return sortState.direction === 'asc' ? -1 : 1;
+            if (valA > valB) return sortState.direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+    }
+
+    return filtered;
+}
+
+function exportToExcel() {
+    if (typeof XLSX === 'undefined') {
+        showToast('Ошибка: библиотека Excel не загружена. Проверьте подключение к интернету.', 'error');
+        return;
+    }
+    try {
+        const filtered = getFilteredData();
+        const exportData = filtered.map(o => {
+        const days = workingDays(o.datePost, o.dateReady, o.status);
+        return {
+            'Заявка': o.zayavka || '',
+            'Дата поступления': o.datePost || '',
+            'Количество мест': o.mesta || '',
+            'Артикул (кол-во) (План)': o.artPlan || '',
+            'Артикул (кол-во) (Факт)': o.artFact || '',
+            'Единиц сырья (План)': o.syrPlan || '',
+            'Единиц сырья (Факт)': o.syrFact || '',
+            'Статус': o.status || '',
+            'Дата передачи на производство': o.dateProd || '',
+            'Дата готовности': o.dateReady || '',
+            'Время выполнения (дни)': days !== null ? days : '',
+            'Исполнитель': o.ispolnitel || '',
+            'Комментарий': o.comment || '',
+            'Заказчик': detectCustomer(o.zayavka),
+            'Заявки с отчета': o.otchet || '',
+            'Идентификатор': o.id || generateIdentifier(o.zayavka) || '',
+            'Дата заявки': extractDateFromName(o.zayavka)
+        };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Заявки');
+
+    // Add filter info to filename
+    let suffix = '';
+    if (document.getElementById('filter-status').value) suffix += '_' + document.getElementById('filter-status').value;
+    if (document.getElementById('filter-customer').value) suffix += '_' + document.getElementById('filter-customer').value;
+    if (document.getElementById('filter-text').value) suffix += '_поиск';
+
+        XLSX.writeFile(wb, 'НПП_Заявки_' + new Date().toISOString().split('T')[0] + (suffix ? suffix : '') + '.xlsx');
+        showToast(`Экспортировано ${filtered.length} заявок`, 'success');
+    } catch (err) {
+        showToast('Ошибка экспорта: ' + err.message, 'error');
+        console.error(err);
+    }
+}
+
+// ==================== COLLAPSIBLE FILTERS ====================
+function toggleFilters() {
+    const content = document.getElementById('filters-content');
+    const icon = document.getElementById('filters-toggle-icon');
+    content.classList.toggle('collapsed');
+    icon.classList.toggle('collapsed');
+}
+
+// ==================== RESIZABLE COLUMNS ====================
+let isResizing = false;
+let currentTh = null;
+let startX = 0;
+let startWidth = 0;
+
+function initResizableColumns() {
+    const table = document.getElementById('main-table');
+    if (!table) return;
+    const headers = table.querySelectorAll('thead th');
+    headers.forEach(th => {
+        // Don't add resize handle to checkbox and actions columns
+        if (th.textContent.includes('Действия') || th.querySelector('input[type="checkbox"]')) return;
+
+        const handle = document.createElement('div');
+        handle.className = 'resize-handle';
+        th.appendChild(handle);
+
+        handle.addEventListener('mousedown', (e) => {
+            isResizing = true;
+            currentTh = th;
+            startX = e.pageX;
+            startWidth = th.offsetWidth;
+            handle.classList.add('resizing');
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+            e.preventDefault();
+            e.stopPropagation();
+        });
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!isResizing || !currentTh) return;
+        const newWidth = startWidth + (e.pageX - startX);
+        if (newWidth > 40) {
+            currentTh.style.width = newWidth + 'px';
+            currentTh.style.minWidth = newWidth + 'px';
+        }
+    });
+
+    document.addEventListener('mouseup', () => {
+        if (isResizing && currentTh) {
+            const handle = currentTh.querySelector('.resize-handle');
+            if (handle) handle.classList.remove('resizing');
+        }
+        isResizing = false;
+        currentTh = null;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+    });
+}
+
+// ==================== DELETE SELECTED ====================
+function deleteSelected() {
+    const checkboxes = document.querySelectorAll('.row-check:checked');
+    if (checkboxes.length === 0) {
+        showToast('Ни одна заявка не выделена', 'error');
+        return;
+    }
+
+    if (!confirm(`Удалить ${checkboxes.length} выделенных заявок?`)) {
+        return;
+    }
+
+    const password = prompt('Введите пароль для удаления:');
+    if (password !== '1234') {
+        showToast('Неверный пароль', 'error');
+        return;
+    }
+
+    // Collect indices (data-idx) and sort in descending order to remove from end
+    const indices = Array.from(checkboxes)
+        .map(cb => parseInt(cb.getAttribute('data-idx'), 10))
+        .sort((a, b) => b - a);
+
+    // Remove from orders array (from highest index to lowest to avoid shifting issues)
+    indices.forEach(idx => {
+        if (idx >= 0 && idx < orders.length) {
+            orders.splice(idx, 1);
+        }
+    });
+
+    // Uncheck "select all" checkbox
+    document.getElementById('select-all').checked = false;
+
+    saveData();
+    renderTable();
+    showToast(`Удалено ${indices.length} заявок`, 'success');
+}
+
+// ==================== INIT ====================
+document.addEventListener('DOMContentLoaded', () => {
+    renderTable();
+    initResizableColumns();
+    // Auto-scroll to bottom so user sees latest entries without scrolling down
+    const tableInner = document.querySelector('.table-inner');
+    if (tableInner) {
+        tableInner.scrollTop = tableInner.scrollHeight;
+    }
+});
+</script>
+</body>
+</html>

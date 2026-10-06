@@ -1,0 +1,13 @@
+{
+  "name": "npp-register",
+  "version": "1.0.0",
+  "private": true,
+  "description": "НПП — Регистр заявок (NestJS + React + MSSQL)",
+  "scripts": {
+    "install:all": "npm --prefix server install && npm --prefix client install",
+    "build": "npm --prefix client run build && npm --prefix server run build",
+    "start": "node server/dist/main.js",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev"
+  }
+}
