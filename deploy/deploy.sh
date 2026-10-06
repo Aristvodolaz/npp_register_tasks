@@ -4,7 +4,7 @@
 # Опции: --pull  — перед сборкой сделать git pull (если проект в git)
 set -euo pipefail
 
-APP_NAME="npp-register"
+APP_NAME="npp-register-v2"
 cd "$(dirname "$0")/.."
 
 command -v node >/dev/null || { echo "Node.js не найден"; exit 1; }

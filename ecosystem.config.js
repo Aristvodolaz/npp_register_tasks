@@ -3,7 +3,7 @@
 module.exports = {
   apps: [
     {
-      name: 'npp-register',
+      name: 'npp-register-v2',
       cwd: __dirname,
       script: 'server/dist/main.js',
       instances: 1,

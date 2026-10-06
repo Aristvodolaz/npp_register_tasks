@@ -2,7 +2,7 @@
 # Запуск: powershell -ExecutionPolicy Bypass -File deploy\deploy.ps1
 $ErrorActionPreference = 'Stop'
 Set-Location (Join-Path $PSScriptRoot '..')
-$app = 'npp-register'
+$app = 'npp-register-v2'
 
 if (-not (Test-Path .env)) { throw 'Нет файла .env — скопируйте .env.example в .env и заполните' }
 if (-not (Get-Command pm2 -ErrorAction SilentlyContinue)) { throw 'pm2 не найден: npm i -g pm2' }
