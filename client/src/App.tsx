@@ -376,6 +376,11 @@ export default function App() {
     setModal((m) => (m ? { ...m, form: { ...m.form, [k]: e.target.value } } : m));
 
   // ---------- Excel ----------
+  /** Дата (ISO или DD.MM.YYYY) -> серийный номер Excel; пусто -> ''. */
+  const excelSerial = (v: string | null | undefined): number | '' => {
+    const d = parseDate(v);
+    return d ? Math.round((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - Date.UTC(1899, 11, 30)) / 864e5) : '';
+  };
   function templateExcel() {
     setMenuOpen(false);
     const ws = XLSX.utils.aoa_to_sheet([[
@@ -391,17 +396,25 @@ export default function App() {
   function exportExcel() {
     setMenuOpen(false);
     const rows = filtered.map((o) => ({
-      'Заявка': o.zayavka, 'Дата поступления': o.datePost ?? '', 'Количество мест': o.mesta ?? '',
+      'Заявка': o.zayavka, 'Дата поступления': excelSerial(o.datePost), 'Количество мест': o.mesta ?? '',
       'Артикул (кол-во) (План)': o.artPlan, 'Артикул (кол-во) (Факт)': o.artFact,
       'Единиц сырья (План)': o.syrPlan ?? '', 'Единиц сырья (Факт)': o.syrFact ?? '', 'Статус': o.status,
-      'Дата передачи на производство': o.dateProd ?? '', 'Дата готовности': o.dateReady ?? '',
+      'Дата передачи на производство': excelSerial(o.dateProd), 'Дата готовности': excelSerial(o.dateReady),
       'Время выполнения (дни)': workingDays(o.datePost, o.dateReady, o.status) ?? '',
       'Исполнитель': o.ispolnitel, 'Комментарий': o.comment, 'Заказчик': detectCustomer(o.zayavka),
       'Заявки с отчета': o.otchet, 'Идентификатор': o.identifier || generateIdentifier(o.zayavka),
-      'Дата заявки': extractDateFromName(o.zayavka),
+      'Дата заявки': excelSerial(extractDateFromName(o.zayavka)),
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    // Даты пишем числами Excel с форматом dd.mm.yyyy: показываются как 01.10.2026, сортируются как даты.
+    const dateCols = ['Дата поступления', 'Дата передачи на производство', 'Дата готовности', 'Дата заявки'];
+    const headers = Object.keys(rows[0] ?? {});
+    rows.forEach((_, r) => dateCols.forEach((h) => {
+      const cell = ws[XLSX.utils.encode_cell({ r: r + 1, c: headers.indexOf(h) })];
+      if (cell && typeof cell.v === 'number') { cell.t = 'n'; cell.z = 'dd.mm.yyyy'; }
     }));
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Заявки');
+    XLSX.utils.book_append_sheet(wb, ws, 'Заявки');
     let suffix = '';
     if (filters.status) suffix += '_' + filters.status;
     if (filters.customer) suffix += '_' + filters.customer;
